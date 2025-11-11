@@ -1,0 +1,46 @@
+# ROS2 Build files
+build/
+install/
+log/
+*.egg-info/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+.pytest_cache/
+.venv/
+venv/
+
+# C++
+*.o
+*.so
+*.a
+CMakeFiles/
+cmake_install.cmake
+CMakeCache.txt
+Makefile
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs and data
+*.log
+*.bag
+*.db3
+
+# Test results
+test_results/
+coverage/
+
+# Benchmark results (optionnel si tu veux les garder)
+# benchmarks/*.csv
+# benchmarks/*.png
