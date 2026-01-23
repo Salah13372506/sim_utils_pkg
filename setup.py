@@ -8,6 +8,11 @@ setup(
     name=package_name,
     version='0.1.0',
     packages=find_packages(),
+    data_files=[
+        ('share/ament_index/resource_index/packages',
+            ['resource/' + package_name]),
+        ('share/' + package_name, ['package.xml']),
+    ],
     install_requires=[
         'setuptools',
         'numpy',
@@ -20,6 +25,8 @@ setup(
     entry_points={
         'console_scripts': [
             'kalman_test = sim_utils_pkg.nodes.kalman_test_node:main',
+            'turtle_pid_controller = sim_utils_pkg.nodes.turtle_pid_controller:main',
+            'ik_position_node = sim_utils_pkg.nodes.ik_position_node:main',
         ],
     },
 )
