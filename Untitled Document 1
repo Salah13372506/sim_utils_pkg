@@ -1,0 +1,18 @@
+ros2 launch ur_description view_ur.launch.py ur_type:=ur5e
+
+
+ros2 run sim_utils_pkg ik_position_node
+
+
+
+ros2 topic pub --once /target_pose geometry_msgs/PoseStamped \
+  "{pose: {position: {x: 0.4, y: 0.1, z: 0.3}, orientation: {w: 0.707, x: 0.0, y: 0.707, z: 0.0}}}"
+
+
+
+ros2 run tf2_ros tf2_echo base_link tool0
+
+
+
+sudo apt install ros-humble-kdl-parser-py ros-humble-urdfdom-py
+

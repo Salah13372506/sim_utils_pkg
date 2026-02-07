@@ -1,5 +1,7 @@
 # setup.py
 
+import os
+from glob import glob
 from setuptools import setup, find_packages
 
 package_name = 'sim_utils_pkg'
@@ -12,6 +14,12 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        ('share/' + package_name + '/config', [
+            'config/ur5e.urdf',
+            'config/ros2_controllers.yaml',
+        ]),
+        ('share/' + package_name + '/launch',
+            glob(os.path.join('launch', '*launch.[pxy][yma]*'))),
     ],
     install_requires=[
         'setuptools',

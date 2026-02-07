@@ -156,53 +156,101 @@ class URDFParser:
         """
         Build KDL chain from base to tip.
 
+        In KDL, segment.pose(q) = joint(q) * f_tip, so the joint rotation
+        comes BEFORE f_tip. In URDF, the origin comes BEFORE the joint:
+        T = origin * joint(q). To handle this, each URDF joint's origin is
+        used as f_tip of the PREVIOUS segment (the "shift" approach).
+
         Returns:
             Tuple of (KDL Chain, list of joint info dicts)
         """
-        chain = PyKDL.Chain()
         joint_names = self.get_chain_joints(base_link, tip_link)
         joint_infos = []
 
+        # Collect all joints with their origin frames
+        entries = []
         for joint_name in joint_names:
             info = self.get_joint_info(joint_name)
-
-            # Create KDL frame for joint origin
-            xyz = info['xyz']
-            rpy = info['rpy']
-
             frame = PyKDL.Frame(
-                PyKDL.Rotation.RPY(rpy[0], rpy[1], rpy[2]),
-                PyKDL.Vector(xyz[0], xyz[1], xyz[2])
+                PyKDL.Rotation.RPY(info['rpy'][0], info['rpy'][1], info['rpy'][2]),
+                PyKDL.Vector(info['xyz'][0], info['xyz'][1], info['xyz'][2])
             )
+            entries.append((info, frame))
 
-            # Create KDL joint based on type
+        # Separate into movable joints and their "shifted" f_tip frames.
+        # URDF chain: O0 * [J0(q0)] * O1 * [J1(q1)] * ... * ON
+        # where Oi = merged fixed + revolute origins, Ji = joint rotation
+        #
+        # KDL needs: seg0_ftip * J0(q0) * seg1_ftip * J1(q1) * ...
+        # So seg_i's f_tip = O_{i+1} (the NEXT origin block)
+
+        # First pass: identify revolute/prismatic joints and merge fixed origins
+        # Result: list of (joint_info_or_None, accumulated_frame)
+        # None means this is a pure fixed segment
+        segments = []  # (joint_info, frame_before_this_joint)
+        accumulated = PyKDL.Frame.Identity()
+
+        for info, frame in entries:
+            if info['type'] in ('revolute', 'continuous', 'prismatic'):
+                # Merge this joint's origin into the accumulated frame
+                accumulated = accumulated * frame
+                segments.append((info, accumulated))
+                accumulated = PyKDL.Frame.Identity()
+            else:
+                # Fixed joint: accumulate its frame
+                accumulated = accumulated * frame
+
+        trailing_frame = accumulated  # remaining fixed transforms after last revolute
+
+        # Build KDL chain with shifted frames
+        chain = PyKDL.Chain()
+
+        for i, (info, frame_before) in enumerate(segments):
             axis = PyKDL.Vector(info['axis'][0], info['axis'][1], info['axis'][2])
 
-            if info['type'] == 'revolute' or info['type'] == 'continuous':
+            # f_tip for this segment = frame_before of NEXT segment, or trailing_frame
+            if i + 1 < len(segments):
+                f_tip = segments[i + 1][1]
+            else:
+                f_tip = trailing_frame
+
+            if i == 0:
+                # Add leading fixed segment with f_tip = frame_before first joint
+                leading = PyKDL.Segment(
+                    'leading_fixed',
+                    PyKDL.Joint('leading_fixed_jnt', PyKDL.Joint.Fixed),
+                    frame_before
+                )
+                chain.addSegment(leading)
+
+            # Create the movable joint
+            if info['type'] in ('revolute', 'continuous'):
                 kdl_joint = PyKDL.Joint(
-                    joint_name,
+                    info['name'],
                     PyKDL.Vector.Zero(),
                     axis,
                     PyKDL.Joint.RotAxis
                 )
                 joint_infos.append(info)
-            elif info['type'] == 'prismatic':
+            else:  # prismatic
                 kdl_joint = PyKDL.Joint(
-                    joint_name,
+                    info['name'],
                     PyKDL.Vector.Zero(),
                     axis,
                     PyKDL.Joint.TransAxis
                 )
                 joint_infos.append(info)
-            elif info['type'] == 'fixed':
-                kdl_joint = PyKDL.Joint(joint_name, PyKDL.Joint.Fixed)
-            else:
-                # Unknown joint type, treat as fixed
-                kdl_joint = PyKDL.Joint(joint_name, PyKDL.Joint.Fixed)
 
-            # Create segment and add to chain
-            segment = PyKDL.Segment(info['child'], kdl_joint, frame)
+            segment = PyKDL.Segment(info['child'], kdl_joint, f_tip)
             chain.addSegment(segment)
+
+        # If there are no movable joints, add remaining fixed transforms
+        if not segments and trailing_frame is not None:
+            chain.addSegment(PyKDL.Segment(
+                'fixed_chain',
+                PyKDL.Joint('fixed_jnt', PyKDL.Joint.Fixed),
+                trailing_frame
+            ))
 
         return chain, joint_infos
 
